@@ -117,10 +117,10 @@ class GNNModel():
         self.device = parameters['device']
 
         self.data_processor = pipeline_registry[dataset_name]['data_processor']
-        self.knn_graph = pipeline_registry[dataset_name]['knn_graph']
+        self.graph = pipeline_registry[dataset_name]['graph']
         self.data_splitter = pipeline_registry[dataset_name]['data_splitter']
 
-        self.graph_data = self.knn_graph.graph_data
+        self.graph_data = self.graph.graph_data
         self.num_features = self.data_processor.X_prepared.shape[1]
         self.num_classes = self.data_processor.num_classes
 
@@ -287,7 +287,7 @@ def main():
         print("--------------------------------")
         pipeline_registry[dataset_name]['data_loader'] = DataLoader(parameters=parameters, dataset=dataset)
         pipeline_registry[dataset_name]['data_processor'] = DataProcessor(parameters=parameters, pipeline_registry=pipeline_registry, dataset_name=dataset_name)
-        pipeline_registry[dataset_name]['knn_graph'] = KNNGraph(parameters=parameters, pipeline_registry=pipeline_registry, dataset_name=dataset_name)
+        pipeline_registry[dataset_name]['graph'] = KNNGraph(parameters=parameters, pipeline_registry=pipeline_registry, dataset_name=dataset_name)
         pipeline_registry[dataset_name]['data_splitter'] = DataSplitter(parameters=parameters)
         pipeline_registry[dataset_name]['gnn_model'] = GNNModel(parameters=parameters, pipeline_registry=pipeline_registry, dataset_name=dataset_name)
 
