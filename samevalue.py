@@ -100,34 +100,29 @@ class CategoricalGraph():
         self.pipeline_registry = pipeline_registry
         self.device = parameters['device']
 
-        # Extract categorical data from the data processor
         self.categorical_data = pipeline_registry[dataset_name]['data_processor'].X_categorical_features
 
-        # Build the graph based on categorical feature similarity
         self.G = nx.Graph()
         self.add_nodes()
         self.add_edges()
 
-        # Convert to PyTorch Geometric format
         self.graph_data = from_networkx(self.G).to(self.device)
         self.graph_data.x = pipeline_registry[dataset_name]['data_processor'].x_tensor
         self.graph_data.y = pipeline_registry[dataset_name]['data_processor'].y_tensor
 
     def add_nodes(self):
-        """Add nodes to the graph, one for each row in the dataset."""
         for idx in range(len(self.categorical_data)):
             self.G.add_node(idx)
 
     def add_edges(self):
-        """Add edges between nodes sharing the same categorical feature values."""
-        for column in self.categorical_data.columns:
-            # Group rows by unique values in this categorical column
-            value_to_indices = self.categorical_data.groupby(column).groups
+    for column in self.categorical_data.columns:
+        value_to_indices = self.categorical_data.groupby(column).groups
 
-            # Connect all nodes in the same group
-            for indices in value_to_indices.values():
-                for i, j in itertools.combinations(indices, 2):
-                    self.G.add_edge(i, j)
+        for indices in value_to_indices.values():
+            for i in indices:
+                for j in indices:
+                    if i != j:
+                        self.G.add_edge(i, j)
 
 class GNNModel():
     def __init__(self, parameters, pipeline_registry, dataset_name):
