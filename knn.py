@@ -109,101 +109,155 @@ class KNNGraph():
     self.graph_data.x = pipeline_registry[dataset_name]['data_processor'].x_tensor
     self.graph_data.y = pipeline_registry[dataset_name]['data_processor'].y_tensor
 
-class GNNModel():
-    def __init__(self, parameters, pipeline_registry, dataset_name):
-        self.parameters = parameters
-        self.pipeline_registry = pipeline_registry
-        self.dataset_name = dataset_name
-        self.device = parameters['device']
+    class GNNModel():
+        def __init__(self, parameters, pipeline_registry, dataset_name):
+            self.parameters = parameters
+            self.pipeline_registry = pipeline_registry
+            self.dataset_name = dataset_name
+            self.device = parameters['device']
 
-        self.data_processor = pipeline_registry[dataset_name]['data_processor']
-        self.graph = pipeline_registry[dataset_name]['graph']
-        self.data_splitter = pipeline_registry[dataset_name]['data_splitter']
+            self.data_processor = pipeline_registry[dataset_name]['data_processor']
+            self.graph = pipeline_registry[dataset_name]['graph']
+            self.data_splitter = pipeline_registry[dataset_name]['data_splitter']
 
-        self.graph_data = self.graph.graph_data
-        self.num_features = self.data_processor.X_prepared.shape[1]
-        self.num_classes = self.data_processor.num_classes
+            self.graph_data = self.graph.graph_data
+            self.num_features = self.data_processor.X_prepared.shape[1]
+            self.num_classes = self.data_processor.num_classes
 
-        self.results = {
-            'f1_scores': [],
-            'accuracy_scores': [],
-            'best_hyperparameters': []
-        }
+            self.results = {
+                'f1_scores': [],
+                'accuracy_scores': [],
+                'best_hyperparameters': []
+            }
 
-        self.run_model()
+            self.run_model()
 
-    def run_model(self):
-        kfold = self.data_splitter.kfold
-        final_f1_scores = []
-        final_accuracy_scores = []
-        final_hyperparameters = []
+        def run_model(self):
+            final_f1_scores = []
+            final_accuracy_scores = []
+            final_hyperparameters = []
 
-        for fold_idx, (train_idx, test_idx) in enumerate(kfold.split(self.graph_data.x.cpu(), self.graph_data.y.cpu())):
-            print(f"\nRunning fold {fold_idx + 1}/10...")
-            train_mask, test_mask = self.create_masks(len(self.graph_data.x), train_idx, test_idx)
+            for fold_idx, (train_val_idx, test_idx) in enumerate(self.data_splitter.split(self.X, self.y)):
+                print(f"\nRunning fold {fold_idx + 1}/10...")
+                X_train_val, X_test = self.X.iloc[train_val_idx], self.X.iloc[test_idx]
+                y_train_val, y_test = self.y.iloc[train_val_idx], self.y.iloc[test_idx]
+                X_train, X_val, y_train, y_val = self.data_splitter.train_test_split(
+                    X_train_val, y_train_val, test_size=0.1, stratify=y_train_val
+                )
 
-            best_model_state = None
-            best_val_f1 = -float('inf')
-            best_params = None
+                best_model = None
+                best_score = -float('inf')
+                best_params = None
+                param_grid = self.get_param_grid()
 
-            param_grid = self.get_param_grid()
-            for params in param_grid:
-                hidden_dim, lr = params['hidden_dim'], params['lr']
-                model = self.build_gnn_model(hidden_dim)
-                optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=5e-4)
+                for params in param_grid:
+                    # Pass parameters to the model
+                    model = xgb.XGBClassifier(
+                        **params,
+                        objective='multi:softmax',
+                        num_class=self.pipeline_registry[self.dataset_name]['data_processor'].num_classes,
+                    )
 
-                for epoch in range(self.parameters['gnn_model']['epochs']):
-                    model.train()
-                    optimizer.zero_grad()
-                    out = model(self.graph_data.x, self.graph_data.edge_index)
-                    loss = F.cross_entropy(out[train_mask], self.graph_data.y[train_mask])
-                    loss.backward()
-                    optimizer.step()
+                    # Use the 'epochs' value as num_boost_round
+                    num_boost_round = self.parameters['xgboost_model']['epochs']
+                    model.fit(
+                        X_train, y_train,
+                        eval_set=[(X_val, y_val)],
+                        verbose=False,
+                        early_stopping_rounds=10
+                    )
+                    val_preds = model.predict(X_val)
+                    val_score = f1_score(y_val, val_preds, average='weighted')
 
-                model.eval()
-                with torch.no_grad():
-                    val_out = out[test_mask]
-                    val_preds = val_out.argmax(dim=1)
-                    val_f1 = f1_score(self.graph_data.y[test_mask].cpu(), val_preds.cpu(), average='weighted')
-
-                    if val_f1 > best_val_f1:
-                        best_val_f1 = val_f1
-                        best_model_state = model.state_dict()
+                    if val_score > best_score:
+                        best_score = val_score
+                        best_model = model
                         best_params = params
 
-            print(f"Fold {fold_idx + 1} - Best Validation F1: {best_val_f1:.4f}")
-            print(f"Fold {fold_idx + 1} - Best Hyperparameters: {best_params}")
+                print(f"Best validation F1 score for fold {fold_idx + 1}: {best_score:.4f}")
+                print(f"Best hyperparameters for fold {fold_idx + 1}: {best_params}")
 
-            model = self.build_gnn_model(best_params['hidden_dim'])
-            model.load_state_dict(best_model_state)
-            model.eval()
-            with torch.no_grad():
-                test_out = model(self.graph_data.x, self.graph_data.edge_index)
-                test_preds = test_out[test_mask].argmax(dim=1)
-                test_f1 = f1_score(self.graph_data.y[test_mask].cpu(), test_preds.cpu(), average='weighted')
-                test_accuracy = accuracy_score(self.graph_data.y[test_mask].cpu(), test_preds.cpu())
+                fold_f1_scores = []
+                fold_accuracy_scores = []
+                for retrain_run in range(3):
+                    print(f"Retraining best model (run {retrain_run + 1}/3)...")
+                    best_model.fit(X_train_val, y_train_val)
+                    test_preds = best_model.predict(X_test)
+                    test_f1 = f1_score(y_test, test_preds, average='weighted')
+                    test_accuracy = accuracy_score(y_test, test_preds)
+                    fold_f1_scores.append(test_f1)
+                    fold_accuracy_scores.append(test_accuracy)
 
-                final_f1_scores.append(test_f1)
-                final_accuracy_scores.append(test_accuracy)
+                avg_f1 = np.mean(fold_f1_scores)
+                avg_accuracy = np.mean(fold_accuracy_scores)
+                print(f"Fold {fold_idx + 1} - Avg F1: {avg_f1:.4f}, Avg Accuracy: {avg_accuracy:.4f}")
+
+                final_f1_scores.append(avg_f1)
+                final_accuracy_scores.append(avg_accuracy)
                 final_hyperparameters.append(best_params)
 
-                print(f"Fold {fold_idx + 1} - Test F1: {test_f1:.4f}, Test Accuracy: {test_accuracy:.4f}")
+            self.results['f1_scores'] = final_f1_scores
+            self.results['accuracy_scores'] = final_accuracy_scores
+            self.results['best_hyperparameters'] = final_hyperparameters
 
-        self.results['f1_scores'] = final_f1_scores
-        self.results['accuracy_scores'] = final_accuracy_scores
-        self.results['best_hyperparameters'] = final_hyperparameters
+            print("\nFinal Results:")
+            print(f"F1 Score - Mean: {np.mean(final_f1_scores):.4f}, Std: {np.std(final_f1_scores):.4f}")
+            print(f"Accuracy - Mean: {np.mean(final_accuracy_scores):.4f}, Std: {np.std(final_accuracy_scores):.4f}")
 
-        print("\nFinal Results:")
-        print(f"F1 Score - Mean: {np.mean(final_f1_scores):.4f}, Std: {np.std(final_f1_scores):.4f}")
-        print(f"Accuracy - Mean: {np.mean(final_accuracy_scores):.4f}, Std: {np.std(final_accuracy_scores):.4f}")
+            print("\nBest Hyperparameters for Each Fold:")
+            for i, params in enumerate(final_hyperparameters, start=1):
+                print(f"Fold {i}: {params}")
 
-        print("\nBest Hyperparameters for Each Fold:")
-        for i, params in enumerate(final_hyperparameters, start=1):
-            print(f"Fold {i}: {params}")
+            most_common_params = max(set(tuple(d.items()) for d in final_hyperparameters),
+                                     key=lambda x: final_hyperparameters.count(dict(x)))
+            print(f"\nMost Frequently Selected Hyperparameters: {dict(most_common_params)}")
 
-        most_common_params = max(set(tuple(d.items()) for d in final_hyperparameters),
-                                 key=lambda x: final_hyperparameters.count(dict(x)))
-        print(f"\nMost Frequently Selected Hyperparameters: {dict(most_common_params)}")
+        def get_param_grid(self):
+            lr_grid = self.parameters['gnn_model']['lr_grid']
+            hidden_dim_grid = self.parameters['gnn_model']['hidden_dim_grid']
+            num_hidden_layers_grid = self.parameters['gnn_model']['num_hidden_layers']
+            weight_decay_grid = self.parameters['gnn_model']['weight_decay_grid']
+
+            param_grid = []
+            for lr, hidden_dim, num_hidden_layers, weight_decay in itertools.product(lr_grid, hidden_dim_grid,
+                                                                                     num_hidden_layers_grid,
+                                                                                     weight_decay_grid):
+                param_grid.append({
+                    'lr': lr,
+                    'hidden_dim': hidden_dim,
+                    'num_hidden_layers': num_hidden_layers,
+                    'weight_decay': weight_decay
+                })
+            return param_grid
+
+        def build_gnn_model(self, hidden_dim, num_hidden_layers):
+            class GCN(torch.nn.Module):
+                def __init__(self, num_features, hidden_dim, num_hidden_layers, num_classes):
+                    super(GCN, self).__init__()
+                    self.layers = torch.nn.ModuleList()
+                    self.layers.append(GCNConv(num_features, hidden_dim))
+
+                    for _ in range(num_hidden_layers - 1):
+                        self.layers.append(GCNConv(hidden_dim, hidden_dim))
+
+                    self.layers.append(GCNConv(hidden_dim, num_classes))
+
+                def forward(self, x, edge_index):
+                    for layer in self.layers[:-1]:
+                        x = layer(x, edge_index)
+                        x = F.relu(x)
+                        x = F.dropout(x, training=self.training)
+                    x = self.layers[-1](x, edge_index)
+                    return x
+
+            return GCN(self.num_features, hidden_dim, num_hidden_layers, self.num_classes).to(self.device)
+
+        def create_masks(self, num_nodes, train_idx, test_idx):
+            train_mask = torch.zeros(num_nodes, dtype=torch.bool)
+            test_mask = torch.zeros(num_nodes, dtype=torch.bool)
+            train_mask[train_idx] = True
+            test_mask[test_idx] = True
+            return train_mask.to(self.device), test_mask.to(self.device)
 
     def get_param_grid(self):
         lr_grid = self.parameters['gnn_model']['lr_grid']
