@@ -103,7 +103,7 @@ class XGBoostModel():
         self.X = pipeline_registry[dataset_name]['data_processor'].X_prepared
         self.y = pipeline_registry[dataset_name]['data_processor'].y_encoded['target']
         self.data_splitter = pipeline_registry[dataset_name]['data_splitter']
-        self.xgb_params = parameters['xgboost_model']  # Ensure model parameters are linked here
+        self.xgb_params = parameters['xgboost_model']
 
         self.results = {
             'f1_scores': [],
@@ -132,11 +132,11 @@ class XGBoostModel():
             param_grid = self.get_param_grid()
 
             for params in param_grid:
-                model = xgb.XGBClassifier(objective='multi:softmax',  # Fixed so it must use the passed parameters
+                model = xgb.XGBClassifier(objective='multi:softmax',
                                           eval_metric='mlogloss',
                                           num_class=self.pipeline_registry[self.dataset_name][
                                               'data_processor'].num_classes,
-                                          **params)  # Pass params here
+                                          **params)
                 model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
                 val_preds = model.predict(X_val)
                 val_score = f1_score(y_val, val_preds, average='weighted')
@@ -168,7 +168,6 @@ class XGBoostModel():
             final_accuracy_scores.append(avg_accuracy)
             final_hyperparameters.append(best_params)
 
-        # Update results
         self.results['f1_scores'] = final_f1_scores
         self.results['accuracy_scores'] = final_accuracy_scores
         self.results['best_hyperparameters'] = final_hyperparameters
@@ -186,12 +185,10 @@ class XGBoostModel():
         print(f"\nMost Frequently Selected Hyperparameters: {dict(most_common_params)}")
 
     def get_param_grid(self):
-      # Extract parameters from the expanded xgboost_model dictionary
       learning_rates = self.xgb_params.get('learning_rate', [0.1])
       max_depths = self.xgb_params.get('max_depth', [5])
       n_estimators_list = self.xgb_params.get('n_estimators', [100])
 
-      # Generate a proper Cartesian product for parameter grid
       param_grid = []
       for lr, depth, n_est in itertools.product(learning_rates, max_depths, n_estimators_list):
           param_grid.append({'learning_rate': lr, 'max_depth': depth, 'n_estimators': n_est})
@@ -216,9 +213,9 @@ def build_parameters():
             ]
 
   xgboost_model = {
-        'learning_rate': [0.01, 0.1, 0.2],  # Include multiple learning rates
-        'max_depth': [3, 5, 7],  # Test smaller and larger tree depths
-        'n_estimators': [50, 100, 200],  # Add a range of estimators
+        'learning_rate': [0.01, 0.1, 0.2],
+        'max_depth': [3, 5, 7],
+        'n_estimators': [50, 100, 200],
     }
 
   return {
