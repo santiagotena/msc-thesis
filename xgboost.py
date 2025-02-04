@@ -35,53 +35,56 @@ from ucimlrepo import fetch_ucirepo
 import itertools
 
 class DataLoader():
-  def __init__(self, parameters, dataset):
-    self.parameters = parameters
-    self.dataset = dataset
-    self.loaded_dataset = fetch_ucirepo(id=dataset['id'])
+    def __init__(self, parameters, dataset):
+        self.parameters = parameters
+        self.dataset = dataset
+        self.loaded_dataset = fetch_ucirepo(id=dataset['id'])
+
 
 class DataProcessor():
-  def __init__(self, parameters, pipeline_registry, dataset_name):
-    self.parameters = parameters
-    self.pipeline_registry = pipeline_registry
-    self.dataset_name = dataset_name
-    self.device = parameters['device']
-    self.loaded_dataset = pipeline_registry[dataset_name]['data_loader'].loaded_dataset
-    self.X = self.loaded_dataset.data.features
-    self.X_numerical_features, self.X_categorical_features = self.split_feature_types()
+    def __init__(self, parameters, pipeline_registry, dataset_name):
+        self.parameters = parameters
+        self.pipeline_registry = pipeline_registry
+        self.dataset_name = dataset_name
+        self.device = parameters['device']
+        self.loaded_dataset = pipeline_registry[dataset_name]['data_loader'].loaded_dataset
+        self.X = self.loaded_dataset.data.features
+        self.X_numerical_features, self.X_categorical_features = self.split_feature_types()
 
-    if self.X_numerical_features.empty:
-      self.X_numeric_scaled = pd.DataFrame()
-    else:
-      self.X_numeric_scaled = self.scale_numeric()
+        if self.X_numerical_features.empty:
+            self.X_numeric_scaled = pd.DataFrame()
+        else:
+            self.X_numeric_scaled = self.scale_numeric()
 
-    if self.X_categorical_features.empty:
-      self.X_categorical_encoded = pd.DataFrame()
-    else:
-      self.X_categorical_encoded = pd.get_dummies(self.X_categorical_features)
+        if self.X_categorical_features.empty:
+            self.X_categorical_encoded = pd.DataFrame()
+        else:
+            self.X_categorical_encoded = pd.get_dummies(self.X_categorical_features)
 
-    self.X_prepared = pd.concat([self.X_numeric_scaled, self.X_categorical_encoded], axis=1)
-    self.x_tensor = torch.tensor(self.X_prepared.values.astype(np.float32), dtype=torch.float).to(self.device)
+        self.X_prepared = pd.concat([self.X_numeric_scaled, self.X_categorical_encoded], axis=1)
+        self.x_tensor = torch.tensor(self.X_prepared.values.astype(np.float32), dtype=torch.float).to(self.device)
 
-    self.y = self.loaded_dataset.data.targets
-    self.y_encoded = self.encode_target()
-    self.num_classes = len(self.y_encoded['target'].unique())
-    self.y_tensor = torch.tensor(self.y_encoded.values.ravel(), dtype=torch.long).to(self.device)
+        self.y = self.loaded_dataset.data.targets
+        self.y_encoded = self.encode_target()
+        self.num_classes = len(self.y_encoded['target'].unique())
+        self.y_tensor = torch.tensor(self.y_encoded.values.ravel(), dtype=torch.long).to(self.device)
 
-  def split_feature_types(self):
-    numerical_features = self.X.select_dtypes(include=[np.number])
-    categorical_features = self.X.select_dtypes(exclude=[np.number])
-    return numerical_features, categorical_features
+    def split_feature_types(self):
+        numerical_features = self.X.select_dtypes(include=[np.number])
+        categorical_features = self.X.select_dtypes(exclude=[np.number])
+        return numerical_features, categorical_features
 
-  def scale_numeric(self):
-    scaler = StandardScaler()
-    X_numeric_scaled = pd.DataFrame(scaler.fit_transform(self.X_numerical_features), columns=self.X_numerical_features.columns)
-    return X_numeric_scaled
+    def scale_numeric(self):
+        scaler = StandardScaler()
+        X_numeric_scaled = pd.DataFrame(scaler.fit_transform(self.X_numerical_features),
+                                        columns=self.X_numerical_features.columns)
+        return X_numeric_scaled
 
-  def encode_target(self):
-    encoder = LabelEncoder()
-    y_encoded = pd.DataFrame(encoder.fit_transform(self.y.values.ravel()), columns=['target'])
-    return y_encoded
+    def encode_target(self):
+        encoder = LabelEncoder()
+        y_encoded = pd.DataFrame(encoder.fit_transform(self.y.values.ravel()), columns=['target'])
+        return y_encoded
+
 
 class DataSplitter():
     def __init__(self, parameters):
@@ -93,6 +96,7 @@ class DataSplitter():
 
     def train_test_split(self, X, y, test_size=0.1, stratify=None):
         return train_test_split(X, y, test_size=test_size, random_state=self.random_seed, stratify=stratify)
+
 
 class XGBoostModel():
     def __init__(self, parameters, pipeline_registry, dataset_name):
@@ -126,6 +130,14 @@ class XGBoostModel():
                 X_train_val, y_train_val, test_size=0.1, stratify=y_train_val
             )
 
+            # Move data to the appropriate device
+            X_train_device = torch.tensor(X_train.values, dtype=torch.float32, device=self.device)
+            X_val_device = torch.tensor(X_val.values, dtype=torch.float32, device=self.device)
+            y_train_device = torch.tensor(y_train.values, dtype=torch.long, device=self.device)
+            y_val_device = torch.tensor(y_val.values, dtype=torch.long, device=self.device)
+            X_test_device = torch.tensor(X_test.values, dtype=torch.float32, device=self.device)
+            y_test_device = torch.tensor(y_test.values, dtype=torch.long, device=self.device)
+
             best_model = None
             best_score = -float('inf')
             best_params = None
@@ -136,9 +148,12 @@ class XGBoostModel():
                                           eval_metric='mlogloss',
                                           num_class=self.pipeline_registry[self.dataset_name][
                                               'data_processor'].num_classes,
+                                          tree_method='hist',
+                                          device=self.parameters['device'],  # Specify device for XGBoost
                                           **params)
-                model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
-                val_preds = model.predict(X_val)
+
+                model.fit(X_train_device, y_train_device, eval_set=[(X_val_device, y_val_device)], verbose=False)
+                val_preds = model.predict(X_val_device)  # Predict using data on the device
                 val_score = f1_score(y_val, val_preds, average='weighted')
 
                 if val_score > best_score:
@@ -153,8 +168,8 @@ class XGBoostModel():
             fold_accuracy_scores = []
             for retrain_run in range(3):
                 print(f"Retraining best model (run {retrain_run + 1}/3)...")
-                best_model.fit(X_train_val, y_train_val)
-                test_preds = best_model.predict(X_test)
+                best_model.fit(X_train_val, y_train_val)  # You might need to move X_train_val to the device if retraining on GPU
+                test_preds = best_model.predict(X_test_device)  # Predict using data on the device
                 test_f1 = f1_score(y_test, test_preds, average='weighted')
                 test_accuracy = accuracy_score(y_test, test_preds)
                 fold_f1_scores.append(test_f1)
@@ -185,14 +200,14 @@ class XGBoostModel():
         print(f"\nMost Frequently Selected Hyperparameters: {dict(most_common_params)}")
 
     def get_param_grid(self):
-      learning_rates = self.xgb_params.get('learning_rate', [0.1])
-      max_depths = self.xgb_params.get('max_depth', [5])
-      n_estimators_list = self.xgb_params.get('n_estimators', [100])
+        learning_rates = self.xgb_params.get('learning_rate', [0.1])
+        max_depths = self.xgb_params.get('max_depth', [5])
+        n_estimators_list = self.xgb_params.get('n_estimators', [100])
 
-      param_grid = []
-      for lr, depth, n_est in itertools.product(learning_rates, max_depths, n_estimators_list):
-          param_grid.append({'learning_rate': lr, 'max_depth': depth, 'n_estimators': n_est})
-      return param_grid
+        param_grid = []
+        for lr, depth, n_est in itertools.product(learning_rates, max_depths, n_estimators_list):
+            param_grid.append({'learning_rate': lr, 'max_depth': depth, 'n_estimators': n_est})
+        return param_grid
 
 #Main
 def build_parameters():
@@ -200,17 +215,13 @@ def build_parameters():
   random_seed = 42
 
   datasets = [
-              {'name': 'dry_bean',
-               'id': 602,},
-    					# {
-              #   'name': 'isolet',
-							# 	'id': 54,
-              # },
-              # {
-              #   'name': 'musk_v2',
-              #   'id': 75,
-              # },
-            ]
+      # {'name': 'dry_bean',
+      #   'id': 602,},
+      # {'name': 'isolet',
+      #  'id': 54, },
+      {'name': 'musk_v2',
+        'id': 75,},
+  ]
 
   xgboost_model = {
         'learning_rate': [0.01, 0.1, 0.2],
