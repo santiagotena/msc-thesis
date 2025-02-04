@@ -296,11 +296,13 @@ def build_parameters():
   random_seed = 42
 
   datasets = [
-    					{
-                'name': 'dry_bean',
-								'id': 602,
-              },
-            ]
+      # {'name': 'dry_bean',
+      #   'id': 602,},
+      {'name': 'isolet',
+       'id': 54, },
+      # {'name': 'musk_v2',
+      #   'id': 75,},
+  ]
 
   knn_graph = {
      						'k': 5,
