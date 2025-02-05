@@ -115,14 +115,14 @@ class CategoricalGraph():
             self.G.add_node(idx)
 
     def add_edges(self):
-    for column in self.categorical_data.columns:
-        value_to_indices = self.categorical_data.groupby(column).groups
+        for column in self.categorical_data.columns:
+            value_to_indices = self.categorical_data.groupby(column).groups
 
-        for indices in value_to_indices.values():
-            for i in indices:
-                for j in indices:
-                    if i != j:
-                        self.G.add_edge(i, j)
+            for indices in value_to_indices.values():
+                for i in indices:
+                    for j in indices:
+                        if i != j:
+                            self.G.add_edge(i, j)
 
 class GNNModel():
     def __init__(self, parameters, pipeline_registry, dataset_name):
@@ -163,10 +163,8 @@ class GNNModel():
 
             param_grid = self.get_param_grid()
             for params in param_grid:
-                hidden_dim, num_hidden_layers, lr, weight_decay = params['hidden_dim'], params['num_hidden_layers'], \
-                params['lr'], params['weight_decay']
-                model = self.build_gnn_model(hidden_dim, num_hidden_layers)
-                optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+                model = self.build_gnn_model(params['hidden_dim'], params['num_hidden_layers'])
+                optimizer = torch.optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
 
                 for epoch in range(self.parameters['gnn_model']['epochs']):
                     model.train()
@@ -223,9 +221,9 @@ class GNNModel():
 
     def get_param_grid(self):
         lr_grid = self.parameters['gnn_model']['lr_grid']
-        hidden_dim_grid = self.parameters['gnn_model']['hidden_dim_grid']
+        hidden_dim_grid = self.parameters['gnn_model']['hidden_dim']
         num_hidden_layers_grid = self.parameters['gnn_model']['num_hidden_layers']
-        weight_decay_grid = self.parameters['gnn_model']['weight_decay_grid']
+        weight_decay_grid = self.parameters['gnn_model']['weight_decay']
 
         param_grid = []
         for lr, hidden_dim, num_hidden_layers, weight_decay in itertools.product(lr_grid, hidden_dim_grid,
@@ -276,20 +274,19 @@ def build_parameters():
   datasets = [
       # {'name': 'dry_bean',
       #   'id': 602,},
-      {'name': 'isolet',
-       'id': 54, },
-      # {'name': 'musk_v2',
-      #   'id': 75,},
+      # {'name': 'isolet',
+      #  'id': 54, },
+      {'name': 'musk_v2',
+        'id': 75,},
   ]
 
   gnn_model = {
-                'hidden_dim': [16],
-                'num_hidden_layers': [2, 3],
-                'epochs': 100,
-                'lr_grid': [0.01, 0.001],
-                'hidden_dim_grid': [16, 32],
-                'weight_decay_grid': [0, 5e-4],
-              }
+      'hidden_dim': [16, 32],
+      'num_hidden_layers': [2, 3],
+      'epochs': 100,
+      'lr_grid': [0.01, 0.001],
+      'weight_decay': [0, 5e-4],
+  }
 
   return {
           'device': device,
