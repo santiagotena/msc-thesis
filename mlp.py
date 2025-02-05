@@ -244,6 +244,7 @@ class MLPModel():
             })
         return param_grid
 
+#Main
 def build_parameters():
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   random_seed = 42
