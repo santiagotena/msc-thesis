@@ -128,7 +128,7 @@ class MLPModel():
             'best_hyperparameters': []
         }
 
-        self.run_model()
+        self.run_model()  # Start model training/validation pipeline
 
     def run_model(self):
         kfold = self.data_splitter.kfold
@@ -136,9 +136,11 @@ class MLPModel():
         final_accuracy_scores = []
         final_hyperparameters = []
 
+        # Iterate over 10 folds
         for fold_idx, (train_val_idx, test_idx) in enumerate(kfold.split(self.X.cpu(), self.y.cpu())):
             print(f"\nRunning fold {fold_idx + 1}/10...")
 
+            # Prepare train, validation, and test data for this fold
             X_train_val, X_test = self.X[train_val_idx], self.X[test_idx]
             y_train_val, y_test = self.y[train_val_idx], self.y[test_idx]
 
@@ -147,6 +149,7 @@ class MLPModel():
             best_params = None
             param_grid = self.get_param_grid()
 
+            # Hyperparameter search for each fold
             for params in param_grid:
                 model = MLP(
                     input_dim=self.X.shape[1],
@@ -160,11 +163,13 @@ class MLPModel():
                 )
                 criterion = torch.nn.CrossEntropyLoss()
 
+                # Train and validate on train_val set
                 self.train_model(model, (X_train_val, y_train_val), params['epochs'], optimizer, criterion)
 
                 val_preds = self.predict(model, X_train_val)
                 val_score = f1_score(y_train_val.cpu(), val_preds.cpu(), average='weighted')
 
+                # Track the best model and hyperparameters for this fold
                 if val_score > best_score:
                     best_score = val_score
                     best_model = model
@@ -173,10 +178,15 @@ class MLPModel():
             print(f"Best validation F1 score for fold {fold_idx + 1}: {best_score:.4f}")
             print(f"Best hyperparameters for fold {fold_idx + 1}: {best_params}")
 
+            # Retrain using best model and hyperparameters and evaluate on test set
             fold_f1_scores = []
             fold_accuracy_scores = []
-            for retrain_run in range(3):
+            for retrain_run in range(3):  # Repeat 3 times for average metrics
                 print(f"Retraining best model (run {retrain_run + 1}/3)...")
+                # Ensure optimizer is re-initialized for retraining
+                optimizer = torch.optim.Adam(
+                    best_model.parameters(), lr=best_params['lr'], weight_decay=best_params['weight_decay']
+                )
                 self.train_model(best_model, (X_train_val, y_train_val),
                                  best_params['epochs'], optimizer, criterion)
 
@@ -186,6 +196,7 @@ class MLPModel():
                 fold_f1_scores.append(test_f1)
                 fold_accuracy_scores.append(test_accuracy)
 
+            # Store metrics for this fold
             avg_f1 = np.mean(fold_f1_scores)
             avg_accuracy = np.mean(fold_accuracy_scores)
             print(f"Fold {fold_idx + 1} - Avg F1: {avg_f1:.4f}, Avg Accuracy: {avg_accuracy:.4f}")
@@ -194,17 +205,21 @@ class MLPModel():
             final_accuracy_scores.append(avg_accuracy)
             final_hyperparameters.append(best_params)
 
+        # Store results
         self.results['f1_scores'] = final_f1_scores
         self.results['accuracy_scores'] = final_accuracy_scores
         self.results['best_hyperparameters'] = final_hyperparameters
 
+        # Display final results
         print("\nFinal Results:")
         print(f"F1 Score - Mean: {np.mean(final_f1_scores):.4f}, Std: {np.std(final_f1_scores):.4f}")
         print(f"Accuracy - Mean: {np.mean(final_accuracy_scores):.4f}, Std: {np.std(final_accuracy_scores):.4f}")
-
         print("\nBest Hyperparameters for Each Fold:")
         for i, params in enumerate(final_hyperparameters, start=1):
             print(f"Fold {i}: {params}")
+
+    # Helper functions for training and prediction remain unchanged
+
         most_common_params = max(set(tuple(d.items()) for d in final_hyperparameters),
                                  key=lambda x: final_hyperparameters.count(dict(x)))
         print(f"\nMost Frequently Selected Hyperparameters: {dict(most_common_params)}")
@@ -230,7 +245,7 @@ class MLPModel():
         lr_grid = self.parameters['mlp_model']['lr_grid']
         hidden_dims = self.parameters['mlp_model']['hidden_dim']
         num_hidden_layers = self.parameters['mlp_model']['num_hidden_layers']
-        weight_decay_grid = self.parameters['mlp_model']['weight_decay_grid']
+        weight_decay_grid = self.parameters['mlp_model']['weight_decay']
         epochs = self.parameters['mlp_model']['epochs']
 
         param_grid = []
@@ -252,10 +267,10 @@ def build_parameters():
   datasets = [
       # {'name': 'dry_bean',
       #   'id': 602,},
-      {'name': 'isolet',
-       'id': 54, },
-      # {'name': 'musk_v2',
-      #   'id': 75,},
+      # {'name': 'isolet',
+      #  'id': 54, },
+      {'name': 'musk_v2',
+        'id': 75,},
   ]
 
   mlp_model = {
@@ -263,7 +278,7 @@ def build_parameters():
                 'num_hidden_layers': [1, 2],
                 'epochs': 100,
                 'lr_grid': [0.01, 0.001],
-                'weight_decay_grid': [0, 5e-4],
+                'weight_decay': [0, 5e-4],
               }
 
   return {

@@ -130,13 +130,11 @@ class XGBoostModel():
                 X_train_val, y_train_val, test_size=0.1, stratify=y_train_val
             )
 
-            # Move data to the appropriate device
             X_train_device = torch.tensor(X_train.values, dtype=torch.float32, device=self.device)
             X_val_device = torch.tensor(X_val.values, dtype=torch.float32, device=self.device)
             y_train_device = torch.tensor(y_train.values, dtype=torch.long, device=self.device)
             y_val_device = torch.tensor(y_val.values, dtype=torch.long, device=self.device)
             X_test_device = torch.tensor(X_test.values, dtype=torch.float32, device=self.device)
-            y_test_device = torch.tensor(y_test.values, dtype=torch.long, device=self.device)
 
             best_model = None
             best_score = -float('inf')
@@ -149,11 +147,12 @@ class XGBoostModel():
                                           num_class=self.pipeline_registry[self.dataset_name][
                                               'data_processor'].num_classes,
                                           tree_method='hist',
-                                          device=self.parameters['device'],  # Specify device for XGBoost
+                                          device=self.parameters['device'],
+                                          random_state=self.parameters['random_seed'],
                                           **params)
 
                 model.fit(X_train_device, y_train_device, eval_set=[(X_val_device, y_val_device)], verbose=False)
-                val_preds = model.predict(X_val_device)  # Predict using data on the device
+                val_preds = model.predict(X_val_device)
                 val_score = f1_score(y_val, val_preds, average='weighted')
 
                 if val_score > best_score:
@@ -168,8 +167,8 @@ class XGBoostModel():
             fold_accuracy_scores = []
             for retrain_run in range(3):
                 print(f"Retraining best model (run {retrain_run + 1}/3)...")
-                best_model.fit(X_train_val, y_train_val)  # You might need to move X_train_val to the device if retraining on GPU
-                test_preds = best_model.predict(X_test_device)  # Predict using data on the device
+                best_model.fit(X_train_val, y_train_val)
+                test_preds = best_model.predict(X_test_device)
                 test_f1 = f1_score(y_test, test_preds, average='weighted')
                 test_accuracy = accuracy_score(y_test, test_preds)
                 fold_f1_scores.append(test_f1)
