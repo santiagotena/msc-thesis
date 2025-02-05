@@ -163,9 +163,10 @@ class GNNModel():
 
             param_grid = self.get_param_grid()
             for params in param_grid:
-                hidden_dim, lr = params['hidden_dim'], params['lr']
-                model = self.build_gnn_model(hidden_dim)
-                optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=5e-4)
+                hidden_dim, num_hidden_layers, lr, weight_decay = params['hidden_dim'], params['num_hidden_layers'], \
+                params['lr'], params['weight_decay']
+                model = self.build_gnn_model(hidden_dim, num_hidden_layers)
+                optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
                 for epoch in range(self.parameters['gnn_model']['epochs']):
                     model.train()
@@ -189,7 +190,7 @@ class GNNModel():
             print(f"Fold {fold_idx + 1} - Best Validation F1: {best_val_f1:.4f}")
             print(f"Fold {fold_idx + 1} - Best Hyperparameters: {best_params}")
 
-            model = self.build_gnn_model(best_params['hidden_dim'])
+            model = self.build_gnn_model(best_params['hidden_dim'], best_params['num_hidden_layers'])
             model.load_state_dict(best_model_state)
             model.eval()
             with torch.no_grad():
@@ -223,27 +224,42 @@ class GNNModel():
     def get_param_grid(self):
         lr_grid = self.parameters['gnn_model']['lr_grid']
         hidden_dim_grid = self.parameters['gnn_model']['hidden_dim_grid']
+        num_hidden_layers_grid = self.parameters['gnn_model']['num_hidden_layers']
+        weight_decay_grid = self.parameters['gnn_model']['weight_decay_grid']
 
         param_grid = []
-        for lr, hidden_dim in itertools.product(lr_grid, hidden_dim_grid):
-            param_grid.append({'lr': lr, 'hidden_dim': hidden_dim})
+        for lr, hidden_dim, num_hidden_layers, weight_decay in itertools.product(lr_grid, hidden_dim_grid,
+                                                                                 num_hidden_layers_grid,
+                                                                                 weight_decay_grid):
+            param_grid.append({
+                'lr': lr,
+                'hidden_dim': hidden_dim,
+                'num_hidden_layers': num_hidden_layers,
+                'weight_decay': weight_decay
+            })
         return param_grid
 
-    def build_gnn_model(self, hidden_dim):
+    def build_gnn_model(self, hidden_dim, num_hidden_layers):
         class GCN(torch.nn.Module):
-            def __init__(self, num_features, hidden_dim, num_classes):
+            def __init__(self, num_features, hidden_dim, num_hidden_layers, num_classes):
                 super(GCN, self).__init__()
-                self.conv1 = GCNConv(num_features, hidden_dim)
-                self.conv2 = GCNConv(hidden_dim, num_classes)
+                self.layers = torch.nn.ModuleList()
+                self.layers.append(GCNConv(num_features, hidden_dim))
+
+                for _ in range(num_hidden_layers - 1):
+                    self.layers.append(GCNConv(hidden_dim, hidden_dim))
+
+                self.layers.append(GCNConv(hidden_dim, num_classes))
 
             def forward(self, x, edge_index):
-                x = self.conv1(x, edge_index)
-                x = F.relu(x)
-                x = F.dropout(x, training=self.training)
-                x = self.conv2(x, edge_index)
+                for layer in self.layers[:-1]:
+                    x = layer(x, edge_index)
+                    x = F.relu(x)
+                    x = F.dropout(x, training=self.training)
+                x = self.layers[-1](x, edge_index)
                 return x
 
-        return GCN(self.num_features, hidden_dim, self.num_classes).to(self.device)
+        return GCN(self.num_features, hidden_dim, num_hidden_layers, self.num_classes).to(self.device)
 
     def create_masks(self, num_nodes, train_idx, test_idx):
         train_mask = torch.zeros(num_nodes, dtype=torch.bool)
@@ -252,6 +268,7 @@ class GNNModel():
         test_mask[test_idx] = True
         return train_mask.to(self.device), test_mask.to(self.device)
 
+#Main
 def build_parameters():
   device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
   random_seed = 42
