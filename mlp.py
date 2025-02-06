@@ -296,6 +296,8 @@ def build_pipeline_registry(dataset_names):
 
 def main():
     parameters = build_parameters()
+    torch.manual_seed(parameters['random_seed'])
+    np.random.seed(parameters['random_seed'])
     dataset_names = [dataset['name'] for dataset in parameters['datasets']]
     pipeline_registry = build_pipeline_registry(dataset_names)
 
