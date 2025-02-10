@@ -97,7 +97,6 @@ class DataSplitter():
     def train_test_split(self, X, y, test_size=0.1, stratify=None):
         return train_test_split(X, y, test_size=test_size, random_state=self.random_seed, stratify=stratify)
 
-
 class XGBoostModel():
     def __init__(self, parameters, pipeline_registry, dataset_name):
         self.parameters = parameters
@@ -199,13 +198,12 @@ class XGBoostModel():
         print(f"\nMost Frequently Selected Hyperparameters: {dict(most_common_params)}")
 
     def get_param_grid(self):
-        learning_rates = self.xgb_params.get('learning_rate', [0.1])
-        max_depths = self.xgb_params.get('max_depth', [5])
-        n_estimators_list = self.xgb_params.get('n_estimators', [100])
+        param_keys = self.xgb_params.keys()
+        param_values = self.xgb_params.values()
 
-        param_grid = []
-        for lr, depth, n_est in itertools.product(learning_rates, max_depths, n_estimators_list):
-            param_grid.append({'learning_rate': lr, 'max_depth': depth, 'n_estimators': n_est})
+        param_combinations = itertools.product(*param_values)
+        param_grid = [dict(zip(param_keys, combination)) for combination in param_combinations]
+
         return param_grid
 
 #Main
@@ -223,10 +221,16 @@ def build_parameters():
   ]
 
   xgboost_model = {
-        'learning_rate': [0.01, 0.1, 0.2],
-        'max_depth': [3, 5, 7],
-        'n_estimators': [50, 100, 200],
-    }
+      'learning_rate': [0.01, 0.1, 0.2],
+      'max_depth': [3, 5, 7],
+      'n_estimators': [50, 100, 200],
+      'colsample_bytree': [0.6, 0.8, 1.0],
+      'subsample': [0.6, 0.8, 1.0],
+      'min_child_weight': [1, 5, 10],
+      'gamma': [0, 0.1, 0.5, 1],
+      'reg_lambda': [0, 1, 10],
+      'reg_alpha': [0, 0.1, 1],
+  }
 
   return {
           'device': device,

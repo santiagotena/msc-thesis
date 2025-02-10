@@ -281,9 +281,9 @@ def build_parameters():
   ]
 
   gnn_model = {
-      'hidden_dim': [16, 32],
-      'num_hidden_layers': [2, 3],
-      'epochs': 100,
+      'hidden_dim': [32, 64, 128],
+      'num_hidden_layers': [1, 2, 3],
+      'epochs': 5000,
       'lr_grid': [0.01, 0.001],
       'weight_decay': [0, 5e-4],
   }
