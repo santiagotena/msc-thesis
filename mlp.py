@@ -265,13 +265,19 @@ def build_parameters():
   random_seed = 42
 
   datasets = [
-      # {'name': 'dry_bean',
-      #   'id': 602,},
-      # {'name': 'isolet',
-      #  'id': 54, },
-      {'name': 'musk_v2',
-        'id': 75,},
-  ]
+              {'name': 'abalone',
+               'id': 1,},
+              {'name': 'adult',
+               'id': 2,},
+              {'name': 'dry_bean',
+               'id': 602,},
+              {'name': 'isolet',
+               'id': 54,},
+              {'name': 'musk_v2',
+               'id': 75,},
+              {'name': 'occupancy_detection',
+               'id': 357,},
+              ]
 
   mlp_model = {
       'hidden_dim': [32, 64, 128],

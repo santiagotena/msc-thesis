@@ -212,13 +212,19 @@ def build_parameters():
   random_seed = 42
 
   datasets = [
-      # {'name': 'dry_bean',
-      #   'id': 602,},
-      # {'name': 'isolet',
-      #  'id': 54, },
-      {'name': 'musk_v2',
-        'id': 75,},
-  ]
+              {'name': 'abalone',
+               'id': 1,},
+              {'name': 'adult',
+               'id': 2,},
+              {'name': 'dry_bean',
+               'id': 602,},
+              {'name': 'isolet',
+               'id': 54,},
+              {'name': 'musk_v2',
+               'id': 75,},
+              {'name': 'occupancy_detection',
+               'id': 357,},
+              ]
 
   xgboost_model = {
       'learning_rate': [0.01, 0.1, 0.2],
