@@ -224,12 +224,12 @@ def build_parameters():
       'learning_rate': [0.01, 0.1, 0.2],
       'max_depth': [3, 5, 7],
       'n_estimators': [50, 100, 200],
-      'colsample_bytree': [0.6, 0.8, 1.0],
-      'subsample': [0.6, 0.8, 1.0],
-      'min_child_weight': [1, 5, 10],
-      'gamma': [0, 0.1, 0.5, 1],
-      'reg_lambda': [0, 1, 10],
-      'reg_alpha': [0, 0.1, 1],
+      # 'colsample_bytree': [0.6, 0.8, 1.0],
+      # 'subsample': [0.6, 0.8, 1.0],
+      # 'min_child_weight': [1, 5, 10],
+      # 'gamma': [0, 0.1, 0.5, 1],
+      # 'reg_lambda': [0, 1, 10],
+      # 'reg_alpha': [0, 0.1, 1],
   }
 
   return {

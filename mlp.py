@@ -276,7 +276,7 @@ def build_parameters():
   mlp_model = {
       'hidden_dim': [32, 64, 128],
       'num_hidden_layers': [1, 2, 3],
-      'epochs': 5000,
+      'epochs': 1000,
       'lr_grid': [0.01, 0.001],
       'weight_decay': [0, 5e-4],
   }
