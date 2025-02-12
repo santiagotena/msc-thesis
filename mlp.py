@@ -16,7 +16,7 @@ import seaborn as sns
 
 # Scikit-learn imports
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, accuracy_score
 from sklearn.neighbors import kneighbors_graph
 from sklearn.metrics import accuracy_score
@@ -61,6 +61,7 @@ class DataProcessor():
       self.X_categorical_encoded = pd.get_dummies(self.X_categorical_features)
 
     self.X_prepared = pd.concat([self.X_numeric_scaled, self.X_categorical_encoded], axis=1)
+    self.X_prepared = self.X_prepared.apply(pd.to_numeric, errors='coerce').fillna(0).astype(float)
     self.x_tensor = torch.tensor(self.X_prepared.values.astype(np.float32), dtype=torch.float).to(self.device)
 
     self.y = self.loaded_dataset.data.targets
@@ -86,13 +87,13 @@ class DataProcessor():
 class DataSplitter():
     def __init__(self, parameters):
         self.random_seed = parameters['random_seed']
-        self.kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=self.random_seed)
+        self.kfold = KFold(n_splits=10, shuffle=True, random_state=self.random_seed)
 
     def split(self, X, y):
         return self.kfold.split(X, y)
 
-    def train_test_split(self, X, y, test_size=0.1, stratify=None):
-        return train_test_split(X, y, test_size=test_size, random_state=self.random_seed, stratify=stratify)
+    def train_test_split(self, X, y, test_size=0.1):
+        return train_test_split(X, y, test_size=test_size, random_state=self.random_seed)
 
 class MLP(torch.nn.Module):
     def __init__(self, input_dim, hidden_dim, num_hidden_layers, output_dim):
@@ -275,8 +276,6 @@ def build_parameters():
                'id': 54,},
               {'name': 'musk_v2',
                'id': 75,},
-              {'name': 'occupancy_detection',
-               'id': 357,},
               ]
 
   mlp_model = {

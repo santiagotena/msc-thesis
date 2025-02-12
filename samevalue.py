@@ -16,7 +16,7 @@ import seaborn as sns
 
 # Scikit-learn imports
 from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.model_selection import train_test_split, StratifiedKFold
+from sklearn.model_selection import train_test_split, KFold
 from sklearn.metrics import classification_report, confusion_matrix, f1_score, accuracy_score
 from sklearn.neighbors import kneighbors_graph
 from sklearn.metrics import accuracy_score
@@ -35,64 +35,67 @@ from ucimlrepo import fetch_ucirepo
 import itertools
 
 class DataLoader():
-  def __init__(self, parameters, dataset):
-    self.parameters = parameters
-    self.dataset = dataset
-    self.loaded_dataset = fetch_ucirepo(id=dataset['id'])
+    def __init__(self, parameters, dataset):
+        self.parameters = parameters
+        self.dataset = dataset
+        self.loaded_dataset = fetch_ucirepo(id=dataset['id'])
+
 
 class DataProcessor():
-  def __init__(self, parameters, pipeline_registry, dataset_name):
-    self.parameters = parameters
-    self.pipeline_registry = pipeline_registry
-    self.dataset_name = dataset_name
-    self.device = parameters['device']
-    self.loaded_dataset = pipeline_registry[dataset_name]['data_loader'].loaded_dataset
-    self.X = self.loaded_dataset.data.features
-    self.X_numerical_features, self.X_categorical_features = self.split_feature_types()
+    def __init__(self, parameters, pipeline_registry, dataset_name):
+        self.parameters = parameters
+        self.pipeline_registry = pipeline_registry
+        self.dataset_name = dataset_name
+        self.device = parameters['device']
+        self.loaded_dataset = pipeline_registry[dataset_name]['data_loader'].loaded_dataset
+        self.X = self.loaded_dataset.data.features
+        self.X_numerical_features, self.X_categorical_features = self.split_feature_types()
 
-    if self.X_numerical_features.empty:
-      self.X_numeric_scaled = pd.DataFrame()
-    else:
-      self.X_numeric_scaled = self.scale_numeric()
+        if self.X_numerical_features.empty:
+            self.X_numeric_scaled = pd.DataFrame()
+        else:
+            self.X_numeric_scaled = self.scale_numeric()
 
-    if self.X_categorical_features.empty:
-      self.X_categorical_encoded = pd.DataFrame()
-    else:
-      self.X_categorical_encoded = pd.get_dummies(self.X_categorical_features)
+        if self.X_categorical_features.empty:
+            self.X_categorical_encoded = pd.DataFrame()
+        else:
+            self.X_categorical_encoded = pd.get_dummies(self.X_categorical_features)
 
-    self.X_prepared = pd.concat([self.X_numeric_scaled, self.X_categorical_encoded], axis=1)
-    self.x_tensor = torch.tensor(self.X_prepared.values.astype(np.float32), dtype=torch.float).to(self.device)
+        self.X_prepared = pd.concat([self.X_numeric_scaled, self.X_categorical_encoded], axis=1)
+        self.X_prepared = self.X_prepared.apply(pd.to_numeric, errors='coerce').fillna(0).astype(float)
+        self.x_tensor = torch.tensor(self.X_prepared.values.astype(np.float32), dtype=torch.float).to(self.device)
 
-    self.y = self.loaded_dataset.data.targets
-    self.y_encoded = self.encode_target()
-    self.num_classes = len(self.y_encoded['target'].unique())
-    self.y_tensor = torch.tensor(self.y_encoded.values.ravel(), dtype=torch.long).to(self.device)
+        self.y = self.loaded_dataset.data.targets
+        self.y_encoded = self.encode_target()
+        self.num_classes = len(self.y_encoded['target'].unique())
+        self.y_tensor = torch.tensor(self.y_encoded.values.ravel(), dtype=torch.long).to(self.device)
 
-  def split_feature_types(self):
-    numerical_features = self.X.select_dtypes(include=[np.number])
-    categorical_features = self.X.select_dtypes(exclude=[np.number])
-    return numerical_features, categorical_features
+    def split_feature_types(self):
+        numerical_features = self.X.select_dtypes(include=[np.number])
+        categorical_features = self.X.select_dtypes(exclude=[np.number])
+        return numerical_features, categorical_features
 
-  def scale_numeric(self):
-    scaler = StandardScaler()
-    X_numeric_scaled = pd.DataFrame(scaler.fit_transform(self.X_numerical_features), columns=self.X_numerical_features.columns)
-    return X_numeric_scaled
+    def scale_numeric(self):
+        scaler = StandardScaler()
+        X_numeric_scaled = pd.DataFrame(scaler.fit_transform(self.X_numerical_features),
+                                        columns=self.X_numerical_features.columns)
+        return X_numeric_scaled
 
-  def encode_target(self):
-    encoder = LabelEncoder()
-    y_encoded = pd.DataFrame(encoder.fit_transform(self.y.values.ravel()), columns=['target'])
-    return y_encoded
+    def encode_target(self):
+        encoder = LabelEncoder()
+        y_encoded = pd.DataFrame(encoder.fit_transform(self.y.values.ravel()), columns=['target'])
+        return y_encoded
 
 class DataSplitter():
     def __init__(self, parameters):
         self.random_seed = parameters['random_seed']
-        self.kfold = StratifiedKFold(n_splits=10, shuffle=True, random_state=self.random_seed)
+        self.kfold = KFold(n_splits=10, shuffle=True, random_state=self.random_seed)
 
     def split(self, X, y):
         return self.kfold.split(X, y)
 
-    def train_test_split(self, X, y, test_size=0.1, stratify=None):
-        return train_test_split(X, y, test_size=test_size, random_state=self.random_seed, stratify=stratify)
+    def train_test_split(self, X, y, test_size=0.1):
+        return train_test_split(X, y, test_size=test_size, random_state=self.random_seed)
 
 class CategoricalGraph():
     def __init__(self, parameters, pipeline_registry, dataset_name):
@@ -282,8 +285,6 @@ def build_parameters():
                'id': 54,},
               {'name': 'musk_v2',
                'id': 75,},
-              {'name': 'occupancy_detection',
-               'id': 357,},
               ]
 
   gnn_model = {
