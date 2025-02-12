@@ -139,7 +139,7 @@ class XGBoostModel():
 
             if missing_classes:
                 dummy_samples = pd.DataFrame(
-                    np.zeros((len(missing_classes), X_train.shape[1])),  # Create dummy rows with zeros
+                    np.zeros((len(missing_classes), X_train.shape[1])),
                     columns=X_train.columns
                 )
                 dummy_labels = pd.Series(list(missing_classes), name=y_train.name)
