@@ -166,7 +166,7 @@ class GNNModel():
 
             param_grid = self.get_param_grid()
             for params in param_grid:
-                model = self.build_gnn_model(params['hidden_dim'], params['num_hidden_layers'])
+                model = self.build_gnn_model(params['hidden_dim'], params['num_hidden_layers']).to(self.device)
                 optimizer = torch.optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
 
                 for epoch in range(self.parameters['gnn_model']['epochs']):
@@ -191,7 +191,7 @@ class GNNModel():
             print(f"Fold {fold_idx + 1} - Best Validation F1: {best_val_f1:.4f}")
             print(f"Fold {fold_idx + 1} - Best Hyperparameters: {best_params}")
 
-            model = self.build_gnn_model(best_params['hidden_dim'], best_params['num_hidden_layers'])
+            model = self.build_gnn_model(best_params['hidden_dim'], best_params['num_hidden_layers']).to(self.device)
             model.load_state_dict(best_model_state)
             model.eval()
             with torch.no_grad():

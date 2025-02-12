@@ -166,7 +166,7 @@ class XGBoostModel():
                     device=self.device,
                     random_state=self.parameters['random_seed'],
                     **params
-                )
+                ).to(self.device)
 
                 model.fit(X_train, y_train, sample_weight=sample_weights, eval_set=[(X_val, y_val)], verbose=False)
 
