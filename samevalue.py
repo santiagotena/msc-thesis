@@ -166,6 +166,8 @@ class GNNModel():
 
             param_grid = self.get_param_grid()
             for params in param_grid:
+                torch.cuda.empty_cache()
+
                 model = self.build_gnn_model(params['hidden_dim'], params['num_hidden_layers']).to(self.device)
                 optimizer = torch.optim.Adam(model.parameters(), lr=params['lr'], weight_decay=params['weight_decay'])
 
@@ -188,6 +190,9 @@ class GNNModel():
                         best_model_state = model.state_dict()
                         best_params = params
 
+                del model, optimizer, out, val_out, val_preds
+                torch.cuda.empty_cache()
+
             print(f"Fold {fold_idx + 1} - Best Validation F1: {best_val_f1:.4f}")
             print(f"Fold {fold_idx + 1} - Best Hyperparameters: {best_params}")
 
@@ -200,11 +205,14 @@ class GNNModel():
                 test_f1 = f1_score(self.graph_data.y[test_mask].cpu(), test_preds.cpu(), average='weighted')
                 test_accuracy = accuracy_score(self.graph_data.y[test_mask].cpu(), test_preds.cpu())
 
-                final_f1_scores.append(test_f1)
-                final_accuracy_scores.append(test_accuracy)
-                final_hyperparameters.append(best_params)
+            final_f1_scores.append(test_f1)
+            final_accuracy_scores.append(test_accuracy)
+            final_hyperparameters.append(best_params)
 
-                print(f"Fold {fold_idx + 1} - Test F1: {test_f1:.4f}, Test Accuracy: {test_accuracy:.4f}")
+            print(f"Fold {fold_idx + 1} - Test F1: {test_f1:.4f}, Test Accuracy: {test_accuracy:.4f}")
+
+            del model, test_out, test_preds
+            torch.cuda.empty_cache()
 
         self.results['f1_scores'] = final_f1_scores
         self.results['accuracy_scores'] = final_accuracy_scores
@@ -228,17 +236,12 @@ class GNNModel():
         num_hidden_layers_grid = self.parameters['gnn_model']['num_hidden_layers']
         weight_decay_grid = self.parameters['gnn_model']['weight_decay']
 
-        param_grid = []
-        for lr, hidden_dim, num_hidden_layers, weight_decay in itertools.product(lr_grid, hidden_dim_grid,
-                                                                                 num_hidden_layers_grid,
-                                                                                 weight_decay_grid):
-            param_grid.append({
-                'lr': lr,
-                'hidden_dim': hidden_dim,
-                'num_hidden_layers': num_hidden_layers,
-                'weight_decay': weight_decay
-            })
-        return param_grid
+        return [
+            {'lr': lr, 'hidden_dim': hidden_dim, 'num_hidden_layers': num_hidden_layers, 'weight_decay': weight_decay}
+            for lr, hidden_dim, num_hidden_layers, weight_decay in itertools.product(lr_grid, hidden_dim_grid,
+                                                                                     num_hidden_layers_grid,
+                                                                                     weight_decay_grid)
+        ]
 
     def build_gnn_model(self, hidden_dim, num_hidden_layers):
         class GCN(torch.nn.Module):
@@ -246,10 +249,8 @@ class GNNModel():
                 super(GCN, self).__init__()
                 self.layers = torch.nn.ModuleList()
                 self.layers.append(GCNConv(num_features, hidden_dim))
-
                 for _ in range(num_hidden_layers - 1):
                     self.layers.append(GCNConv(hidden_dim, hidden_dim))
-
                 self.layers.append(GCNConv(hidden_dim, num_classes))
 
             def forward(self, x, edge_index):
@@ -277,8 +278,6 @@ def build_parameters():
   datasets = [
               {'name': 'abalone',
                'id': 1,},
-              {'name': 'adult',
-               'id': 2,},
               {'name': 'dry_bean',
                'id': 602,},
               {'name': 'isolet',
@@ -316,6 +315,7 @@ def main():
     pipeline_registry = build_pipeline_registry(dataset_names)
 
     for dataset in parameters['datasets']:
+        torch.cuda.empty_cache()
         dataset_name = dataset['name']
         print("--------------------------------")
         print(f"Loading dataset: {dataset_name}")
