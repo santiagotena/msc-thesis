@@ -257,8 +257,6 @@ def build_parameters():
     datasets = [
         {'name': 'abalone',
          'id': 1, },
-        {'name': 'adult',
-         'id': 2, },
         {'name': 'dry_bean',
          'id': 602, },
         {'name': 'isolet',
@@ -296,6 +294,7 @@ def main():
     pipeline_registry = build_pipeline_registry(dataset_names)
 
     for dataset in parameters['datasets']:
+        torch.cuda.empty_cache()
         dataset_name = dataset['name']
         print("--------------------------------")
         print(f"Loading dataset: {dataset_name}")
