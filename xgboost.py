@@ -34,6 +34,9 @@ from ucimlrepo import fetch_ucirepo
 # Itertools
 import itertools
 
+# Cudf
+import cudf
+
 class DataLoader():
     def __init__(self, parameters, dataset):
         self.parameters = parameters
@@ -131,6 +134,13 @@ class XGBoostModel():
                 X_train_val, y_train_val, test_size=0.1
             )
 
+            X_train = self.move_to_device(X_train)
+            X_val = self.move_to_device(X_val)
+            X_test = self.move_to_device(X_test)
+            y_train = self.move_to_device(y_train)
+            y_val = self.move_to_device(y_val)
+            y_test = self.move_to_device(y_test)
+
             unique_classes = set(np.unique(y_train))
             full_classes = set(range(self.num_classes))
             missing_classes = full_classes - unique_classes
@@ -162,8 +172,7 @@ class XGBoostModel():
                     objective='multi:softmax',
                     eval_metric='mlogloss',
                     num_class=self.num_classes,
-                    tree_method='hist',
-                    device=self.device,
+                    tree_method='gpu_hist' if self.device == 'cuda' else 'hist',
                     random_state=self.parameters['random_seed'],
                     **params
                 )
@@ -206,6 +215,9 @@ class XGBoostModel():
                 else:
                     sample_weights = np.ones(len(y_train_val))
 
+                X_train_val = self.move_to_device(X_train_val)
+                y_train_val = self.move_to_device(y_train_val)
+
                 best_model.fit(X_train_val, y_train_val, sample_weight=sample_weights)
 
                 test_preds = best_model.predict(X_test)
@@ -236,8 +248,16 @@ class XGBoostModel():
             print(f"Fold {i}: {params}")
 
         most_common_params = max(set(tuple(d.items()) for d in final_hyperparameters),
-                                 key=lambda x: final_hyperparameters.count(dict(x)))
+                                key=lambda x: final_hyperparameters.count(dict(x)))
         print(f"\nMost Frequently Selected Hyperparameters: {dict(most_common_params)}")
+
+    def move_to_device(self, data):
+        if self.device == 'cuda':
+            if isinstance(data, pd.DataFrame):
+                return cudf.DataFrame.from_pandas(data)
+            elif isinstance(data, pd.Series):
+                return cudf.Series(data)
+        return data
 
     def get_param_grid(self):
         param_keys = self.xgb_params.keys()
@@ -247,7 +267,6 @@ class XGBoostModel():
         param_grid = [dict(zip(param_keys, combination)) for combination in param_combinations]
 
         return param_grid
-
 
 # Main
 def build_parameters():
