@@ -285,9 +285,10 @@ def build_parameters():
     ]
 
     xgboost_model = {
-        'learning_rate': [0.01, 0.1, 0.2],
-        'max_depth': [3, 5, 7],
-        'n_estimators': [50, 100, 200],
+        "max_depth": [4, 6, 8],
+        "alpha": [1e-6, 1e-2, 0.1],
+        "lambda": [1e-6, 1e-2, 0.1],
+        "eta": [0.1, 0.2],
     }
 
     return {
