@@ -34,6 +34,9 @@ from ucimlrepo import fetch_ucirepo
 # Itertools
 import itertools
 
+# Cudf
+import cudf
+
 class DataLoader():
     def __init__(self, parameters, dataset):
         self.parameters = parameters
