@@ -265,6 +265,10 @@ def build_parameters():
                'id': 54,},
               {'name': 'musk_v2',
                'id': 75,},
+              {'name': 'german_credit_data',
+               'id': 144,},
+              {'name': 'car_evaluation',
+               'id': 19,},
               ]
 
   mlp_model = {

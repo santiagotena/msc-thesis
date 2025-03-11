@@ -274,15 +274,19 @@ def build_parameters():
     random_seed = 42
 
     datasets = [
-        {'name': 'abalone',
-         'id': 1, },
-        {'name': 'dry_bean',
-         'id': 602, },
-        {'name': 'isolet',
-         'id': 54, },
-        {'name': 'musk_v2',
-         'id': 75, },
-    ]
+                {'name': 'abalone',
+                 'id': 1, },
+                {'name': 'dry_bean',
+                 'id': 602, },
+                {'name': 'isolet',
+                 'id': 54, },
+                {'name': 'musk_v2',
+                 'id': 75, },
+                {'name': 'german_credit_data',
+                 'id': 144,},
+                {'name': 'car_evaluation',
+                 'id': 19,},
+                ]
 
     xgboost_model = {
         "max_depth": [4, 6, 8],
