@@ -270,6 +270,8 @@ def build_parameters():
                'id': 54,},
               {'name': 'musk_v2',
                'id': 75,},
+              {'name': 'german_credit_data',
+               'id': 144,},
               ]
 
   knn_graph = {
