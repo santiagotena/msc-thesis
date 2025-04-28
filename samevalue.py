@@ -1,10 +1,3 @@
-# Colab installs
-!pip install seaborn
-!pip install torch-geometric
-!pip install networkx
-!pip install ucimlrepo
-!pip install xgboost
-
 # Core imports
 import numpy as np
 import pandas as pd
